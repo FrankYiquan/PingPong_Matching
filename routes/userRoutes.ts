@@ -1,47 +1,75 @@
-// src/routes/userRoutes.ts
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { User } from "../models/User";
+import jwt from "jsonwebtoken";
 
-export const userRouter = Router();
+export function createUserRouter() {
+  const router = Router();
 
-// POST /user/create
-userRouter.post("/create", async (req, res) => {
-  try {
-    const { username, email, password, profileImage } = req.body;
+  // POST /user/create
+  router.post("/create", async (req, res) => {
+    try {
+      const { username, email, password, profileImage } = req.body;
 
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: "username, email, password required" });
+      if (!username || !email || !password) {
+        return res.status(400).json({ error: "username, email, password required" });
+      }
+
+      // check duplicate email
+      const exists = await User.findOne({ email });
+      if (exists) return res.status(400).json({ error: "Email already registered" });
+
+      // hash password
+      const hashed = await bcrypt.hash(password, 10);
+
+      const user = await User.create({
+        username,
+        email,
+        password: hashed,
+        profileImage: profileImage ?? "avatar1.png",
+        elo: 1000,          // default elo
+        creditScore: 100,   // default score
+      });
+
+      return res.json({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        elo: user.elo,
+        creditScore: user.creditScore,
+        profileImage: user.profileImage,
+      });
+
+    } catch (err: any) {
+      console.error(err);
+      return res.status(500).json({ error: err.message });
     }
+  });
 
-    // check duplicate email
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ error: "Email already registered" });
+  // POST /user/login
+  router.post("/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
 
-    // hash password
-    const hashed = await bcrypt.hash(password, 10);
+      const user = await User.findOne({ email });
+      if (!user) return res.status(400).json({ error: "Invalid credentials" });
 
-    const user = await User.create({
-      username,
-      email,
-      password: hashed,
-      profileImage: profileImage ?? "avatar1.png",
-      elo: 1000,          // default elo
-      creditScore: 100,   // default score
-    });
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) return res.status(400).json({ error: "Invalid credentials" });
 
-    // return safe user info
-    return res.json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      elo: user.elo,
-      creditScore: user.creditScore,
-      profileImage: user.profileImage,
-    });
+      const token = jwt.sign(
+        { id: user._id },
+        process.env.JWT_SECRET!,
+        { expiresIn: "7d" }
+      );
 
-  } catch (err: any) {
-    console.error(err);
-    return res.status(500).json({ error: err.message });
-  }
-});
+      return res.json({ token });
+
+    } catch (err: any) {
+      console.error(err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  return router;
+}

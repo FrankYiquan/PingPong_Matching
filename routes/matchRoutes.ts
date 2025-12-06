@@ -5,16 +5,16 @@ import { enqueueMatchRequest } from "../matchmaking/enqueue";
 import { acceptMatch, declineMatch } from "../matchmaking/acceptDecline";
 import { Notifier } from "../matchmaking/notifier";
 import { Location } from "../types/matchmaking";
-//  auth middleware
-// import { requireAuth } from "../middleware/auth";
+import { requireAuth } from "../middlewares/auth";
 
 export function createMatchRouter(notifier: Notifier) {
   const router = Router();
 
+  router.use(requireAuth); // apply auth middleware to all routes
+
   // Start matchmaking
   router.post(
     "/start",
-    // requireAuth,
     async (req: any, res) => {
       try {
         const userId = req.user.id; // from auth
@@ -52,9 +52,9 @@ export function createMatchRouter(notifier: Notifier) {
   );
 
   // Cancel search
+  // User click startRequest then decides to cancel before matched
   router.post(
     "/cancel",
-    // requireAuth,
     async (req: any, res) => {
       try {
         const userId = req.user.id;
@@ -84,7 +84,6 @@ export function createMatchRouter(notifier: Notifier) {
   // Accept match
   router.post(
     "/accept",
-    // requireAuth,
     async (req: any, res) => {
       try {
         const userId = req.user.id;
@@ -101,7 +100,6 @@ export function createMatchRouter(notifier: Notifier) {
   // Decline match
   router.post(
     "/decline",
-    // requireAuth,
     async (req: any, res) => {
       try {
         const userId = req.user.id;
@@ -118,7 +116,6 @@ export function createMatchRouter(notifier: Notifier) {
   // Public waitlist: list waitlisted match requests
   router.get(
     "/waitlist",
-    // requireAuth,
     async (_req, res) => {
       try {
         const waitlisted = await MatchRequest.find({ status: "waitlisted" })
@@ -138,7 +135,6 @@ export function createMatchRouter(notifier: Notifier) {
   // Move an expired search to waitlist
   router.post(
     "/waitlist/:id",
-    // requireAuth,
     async (req: any, res) => {
       try {
         const userId = req.user.id;

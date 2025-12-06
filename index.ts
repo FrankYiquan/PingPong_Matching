@@ -8,7 +8,7 @@ import { redis } from "./redis/redisClient"; // shared redis instance
 import { startMatchEngine } from "./matchmaking/matchEngine"; 
 import { createMatchRouter } from "./routes/matchRoutes";
 import { Notifier } from "./matchmaking/notifier";
-import { userRouter } from "./routes/userRoutes";
+import { createUserRouter } from "./routes/userRoutes";
 
 const app = express();
 app.use(express.json());
@@ -67,7 +67,7 @@ startMatchEngine(notifier, 1000); // run every 1s
 
 // ---------- EXPRESS ROUTES ----------
 app.use("/match", createMatchRouter(notifier));
-app.use("/user", userRouter);
+app.use("/user", createUserRouter());
 
 
 app.get("/", (req, res) => {
