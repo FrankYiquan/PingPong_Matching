@@ -17,9 +17,7 @@ export function createMatchRouter(notifier: Notifier) {
     // requireAuth,
     async (req: any, res) => {
       try {
-        // const userId = req.user.id; // from auth
-        const userId = req.headers["x-user-id"] as string;
-        if (!userId) return res.status(400).json({ error: "Missing x-user-id header" });
+        const userId = req.user.id; // from auth
         
         const { location, startTime, endTime, playerCount } = req.body;
 
