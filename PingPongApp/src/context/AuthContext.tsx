@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/login`, { 
+      const response = await fetch(`${API_URL}/user/login`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (username: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/signup`, { 
+      const response = await fetch(`${API_URL}/user/create`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),

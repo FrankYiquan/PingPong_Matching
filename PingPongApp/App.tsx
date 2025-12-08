@@ -29,7 +29,7 @@ const MainApp = () => {
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={{flex: 1}}>
         
-        {/* Header Login Button (Optional: Hide if already logged in) */}
+        {/* Header Login Button (Hide if already logged in) */}
         {!userToken && (
           <View style={{position: 'absolute', top: 50, right: 20, zIndex: 100}}>
              <TouchableOpacity onPress={() => setAuthVisible(true)}>

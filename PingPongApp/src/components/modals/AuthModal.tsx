@@ -9,11 +9,14 @@ import {
   KeyboardAvoidingView, 
   Platform,
   TouchableWithoutFeedback,
-  Keyboard
+  Keyboard,
+  ActivityIndicator, // <--- Import this
+  Alert              // <--- Import this for native alerts
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext'; 
 
 interface Props {
   visible: boolean;
@@ -26,17 +29,35 @@ const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  
+  // 1. Get isLoading from context
+  const { login, register, isLoading } = useAuth();
 
-  const handleSubmit = () => {
-    // Mock Auth Logic
-    if (isLogin) {
-      console.log("Logging in with:", email, password);
-    } else {
-      console.log("Signing up with:", username, email, password);
+  const handleSubmit = async () => {
+    // Basic validation
+    if (!email || !password || (!isLogin && !username)) {
+      Alert.alert("Missing Fields", "Please fill in all fields.");
+      return;
     }
-    // Simulate success
-    if (onLoginSuccess) onLoginSuccess();
-    onClose();
+
+    try {
+      if (isLogin) {
+        await login(email, password);
+      } else {
+        await register(username, email, password);
+      }
+      
+      // 2. Success! Call the callback and close modal
+      if (onLoginSuccess) onLoginSuccess();
+      onClose();
+      
+      setEmail('');
+      setPassword('');
+      setUsername('');
+      
+    } catch (err: any) {
+      console.log("Auth error:", err.message);
+    }
   };
 
   return (
@@ -70,6 +91,7 @@ const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
                       placeholderTextColor={COLORS.textSec}
                       value={username}
                       onChangeText={setUsername}
+                      autoCapitalize="none" // Important for usernames
                     />
                   </View>
                 )}
@@ -100,16 +122,26 @@ const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
                 </View>
               </View>
 
-              {/* Submit Button */}
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+              {/* 3. Submit Button with Loading State */}
+              <TouchableOpacity 
+                style={[styles.submitBtn, isLoading && { opacity: 0.8 }]} 
+                onPress={handleSubmit}
+                disabled={isLoading} // Prevent double clicks
+              >
                 <LinearGradient
                   colors={[COLORS.primary, COLORS.primaryDark]}
                   style={styles.gradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Text style={styles.submitText}>{isLogin ? 'LOG IN' : 'SIGN UP'}</Text>
-                  <Feather name="arrow-right" size={20} color="white" />
+                  {isLoading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <>
+                      <Text style={styles.submitText}>{isLogin ? 'LOG IN' : 'SIGN UP'}</Text>
+                      <Feather name="arrow-right" size={20} color="white" />
+                    </>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
 
