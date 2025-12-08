@@ -6,6 +6,8 @@ import { MY_STATS, DATES } from '../constants/data';
 import PingPongBallButton from '../components/buttons/PingPongBallButton';
 import TimePickerModal from '../components/modals/TimePickerModal';
 import VsMatchingScreen from './VsMatchingScreen';
+import { useAuth } from '../context/AuthContext';
+import AuthModal from '../components/modals/AuthModal';
 
 const PlayScreen: React.FC = () => {
   const [matchMode, setMatchMode] = useState(false);
@@ -15,13 +17,27 @@ const PlayScreen: React.FC = () => {
   const [activeTimeField, setActiveTimeField] = useState<'start' | 'end' | null>(null); 
   const [startTime, setStartTime] = useState("6:00 PM");
   const [endTime, setEndTime] = useState("7:30 PM");
+  const [authVisible, setAuthVisible] = useState(false); 
+  
+
+  const {userToken, isLoading} = useAuth(); 
 
   const openTimePicker = (field: 'start' | 'end') => { setActiveTimeField(field); setTimeModalVisible(true); };
+
   const handleTimeSelect = (time: string) => {
     if (activeTimeField === 'start') setStartTime(time);
     else setEndTime(time);
     setTimeModalVisible(false);
   };
+
+  const handleMatchButtonPress = () => {
+    if (!isLoading && !userToken) {
+      setAuthVisible(true);
+      return;
+    }
+    setMatchMode(true);
+  }
+
 
   return (
     <View style={styles.container}>
@@ -54,7 +70,7 @@ const PlayScreen: React.FC = () => {
         </View>
 
         {/* Start Matching Button */}
-        <View style={styles.center}><PingPongBallButton onPress={() => setMatchMode(true)} /><Text style={styles.cta}>Tap to find match</Text></View>
+        <View style={styles.center}><PingPongBallButton onPress={handleMatchButtonPress} /><Text style={styles.cta}>Tap to find match</Text></View>
 
         {/* Court Selection */}
         <View style={styles.courtSec}>
@@ -73,6 +89,12 @@ const PlayScreen: React.FC = () => {
 
       <TimePickerModal visible={timeModalVisible} title={activeTimeField === 'start' ? "Start Time" : "End Time"} onClose={() => setTimeModalVisible(false)} onSelect={handleTimeSelect} />
       <VsMatchingScreen visible={matchMode} onClose={() => setMatchMode(false)} onMatchAccepted={() => { setMatchMode(false); Alert.alert("Match Accepted!", "Game on."); }} />
+       <AuthModal 
+        visible={authVisible} 
+        onClose={() => setAuthVisible(false)}
+        onLoginSuccess={() => {
+        }}
+      />
     </View>
   );
 };

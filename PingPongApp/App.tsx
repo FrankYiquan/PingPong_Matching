@@ -4,14 +4,40 @@ import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { COLORS } from './src/constants/theme';
 import PlayScreen from './src/screens/PlayScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import AuthModal from './src/components/modals/AuthModal';
+import { AuthProvider, useAuth } from './src/context/AuthContext'; // <--- Import useAuth
+import { SocketProvider } from './src/context/SocketContext';
 
-export default function App() {
+const MainApp = () => {
   const [tab, setTab] = useState<'play' | 'profile'>('play');
+  const [authVisible, setAuthVisible] = useState(false);
+  
+  // 1. Get the token from context
+  const { userToken } = useAuth(); 
+
+  // 2. Helper function to handle Profile click
+  const handleProfilePress = () => {
+    if (!userToken) {
+      setAuthVisible(true); // Show login if not logged in
+    } else {
+      setTab('profile'); // Switch tab if logged in
+    }
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={{flex: 1}}>
+        
+        {/* Header Login Button (Optional: Hide if already logged in) */}
+        {!userToken && (
+          <View style={{position: 'absolute', top: 50, right: 20, zIndex: 100}}>
+             <TouchableOpacity onPress={() => setAuthVisible(true)}>
+                <Text style={{fontWeight: 'bold', color: COLORS.primary}}>Log In</Text>
+             </TouchableOpacity>
+          </View>
+        )}
+
         <View style={{ flex: 1 }}>
           {tab === 'play' ? <PlayScreen /> : <ProfileScreen />}
         </View>
@@ -23,12 +49,34 @@ export default function App() {
           <MaterialCommunityIcons name="table-tennis" size={26} color={tab === 'play' ? COLORS.primary : COLORS.textSec} />
           <Text style={[styles.tabText, {color: tab === 'play' ? COLORS.primary : COLORS.textSec}]}>Play</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => setTab('profile')}>
+
+        {/* 3. Protect this Tab */}
+        <TouchableOpacity style={styles.tabItem} onPress={handleProfilePress}>
           <FontAwesome5 name="user-alt" size={20} color={tab === 'profile' ? COLORS.primary : COLORS.textSec} />
           <Text style={[styles.tabText, {color: tab === 'profile' ? COLORS.primary : COLORS.textSec}]}>Profile</Text>
         </TouchableOpacity>
       </View>
+
+      <AuthModal 
+        visible={authVisible} 
+        onClose={() => setAuthVisible(false)}
+        onLoginSuccess={() => {
+           console.log("Logged in form MainApp!");
+           // Optional: Auto-switch to profile on success
+           // setTab('profile'); 
+        }}
+      />
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <SocketProvider>  
+        <MainApp />
+      </SocketProvider>
+    </AuthProvider>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Modal, SafeAreaView, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,18 +6,32 @@ import { COLORS } from '../constants/theme';
 import { MY_STATS, HISTORY, Match } from '../constants/data';
 import MatchSelectionModal from '../components/modals/MatchSelectionModal';
 import ScoreModal from '../components/modals/ScoreModal';
+import { useAuth } from '../context/AuthContext';
+import AuthModal from '../components/modals/AuthModal';
 
 const ProfileScreen: React.FC = () => {
   const [showMyQR, setShowMyQR] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showMatchSelector, setShowMatchSelector] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const [authVisible, setAuthVisible] = useState(false); 
+  const {userToken, isLoading} = useAuth(); 
+  
+  
 
   const handleMatchSelect = (match: Match) => { 
     setShowMatchSelector(false); 
     setTimeout(() => setSelectedMatch(match), 300); 
   };
 
+  useEffect(() => {
+    if (!isLoading && !userToken) {
+      setAuthVisible(true);
+    } else {
+      setAuthVisible(false);
+    }
+  }, [userToken, isLoading]);
+  
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
@@ -72,6 +86,11 @@ const ProfileScreen: React.FC = () => {
       
       <Modal visible={showMyQR} transparent animationType="fade"><View style={styles.modalOverlay}><View style={styles.qrCard}><Text style={styles.qrTitle}>My Player ID</Text><MaterialCommunityIcons name="qrcode" size={200} color="black" style={{marginVertical: 20}} /><TouchableOpacity onPress={() => setShowMyQR(false)} style={styles.closeBtn}><Text style={styles.closeText}>Close</Text></TouchableOpacity></View></View></Modal>
       <Modal visible={showCamera} animationType="slide"><SafeAreaView style={{flex:1, backgroundColor:'black'}}><View style={{flex:1, justifyContent:'center', alignItems:'center'}}><Text style={{color:'white', marginBottom: 20}}>Scan QR Code</Text><View style={{width: 250, height: 250, borderWidth: 2, borderColor: COLORS.primary}} /></View><TouchableOpacity onPress={() => setShowCamera(false)} style={{padding: 20, alignItems:'center', marginBottom: 30}}><Text style={{color:'white', fontSize: 18, fontWeight: 'bold'}}>Close Camera</Text></TouchableOpacity></SafeAreaView></Modal>
+       <AuthModal 
+        visible={authVisible} 
+        onClose={() => setAuthVisible(false)}
+        onLoginSuccess={() => console.log("User logged in!")}
+      />
     </View>
   );
 };
