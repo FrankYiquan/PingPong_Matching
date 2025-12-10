@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '../../constants/theme';
 import { Match } from '../../constants/data';
+import { useAuth } from '@/src/context/AuthContext';
+import { API_URL } from '@/src/constants/config';
 
 interface VProps {
   label: string;
@@ -32,8 +34,31 @@ interface Props {
 }
 
 const ScoreModal: React.FC<Props> = ({ visible, match, onClose }) => {
+  const { userToken, refreshUser } = useAuth();
   const [myScore, setMyScore] = useState(0);
   const [opScore, setOpScore] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!userToken) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/match/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+        body: JSON.stringify({ matchId: match!.id, myScore, opponentScore: opScore })
+      });
+      if (!res.ok) throw new Error("Failed to submit");
+      
+      Alert.alert("Success", "Score submitted!");
+      await refreshUser(userToken); // Refresh profile data
+      onClose();
+    } catch (e) {
+      Alert.alert("Error", "Could not submit score");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!match) return null;
 
@@ -51,8 +76,8 @@ const ScoreModal: React.FC<Props> = ({ visible, match, onClose }) => {
             <Text style={styles.colon}>:</Text>
             <VerticalScoreInput label={match.opponent.split(' ')[0]} score={opScore} setScore={setOpScore} />
           </View>
-          <TouchableOpacity style={styles.btn} onPress={() => { Alert.alert("Score Submitted"); onClose(); }}>
-            <Text style={styles.btnText}>SUBMIT SCORE</Text>
+          <TouchableOpacity style={styles.btn} onPress={handleSubmit} disabled={loading}>
+              {loading ? <ActivityIndicator color="white" /> : <Text style={styles.btnText}>SUBMIT SCORE</Text>}
           </TouchableOpacity>
         </View>
       </View>

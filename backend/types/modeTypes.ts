@@ -28,7 +28,14 @@ export interface IUser {
 export interface IMatch {
   player1Id: Types.ObjectId;
   player2Id: Types.ObjectId;
-  location: Location;
+  location: "Gosman" | "Shapiro" | "IBS";
   scheduledStartTime: Date;
+  
+  player1Score?: number;
+  player2Score?: number;
+  winnerId?: Types.ObjectId;
+  status: "scheduled" | "completed" | "cancelled";
+  
   createdAt: Date;
+  updatedAt: Date;
 }

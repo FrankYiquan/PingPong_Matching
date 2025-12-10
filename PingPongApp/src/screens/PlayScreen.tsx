@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
-import { MY_STATS, DATES } from '../constants/data';
+import { MY_STATS, DATES, courts } from '../constants/data';
 import PingPongBallButton from '../components/buttons/PingPongBallButton';
 import TimePickerModal from '../components/modals/TimePickerModal';
 import VsMatchingScreen from './VsMatchingScreen';
 import { useAuth } from '../context/AuthContext';
 import AuthModal from '../components/modals/AuthModal';
 
+// --- NEW IMPORTS ---
+import { calculateMatchTimes } from '../utils/dateHelper';
+import { useStartMatchmaking } from '../hooks/useStartMatchmaking';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 const PlayScreen: React.FC = () => {
+  const { userToken, isLoading: authLoading, refreshUser, userData } = useAuth(); 
+  
+  // Use the new Hook
+  const { startSearch, isStarting } = useStartMatchmaking();
+
+  // UI State
   const [matchMode, setMatchMode] = useState(false);
+  const [matchRequestId, setMatchRequestId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedCourt, setSelectedCourt] = useState(1);
   const [timeModalVisible, setTimeModalVisible] = useState(false);
@@ -18,9 +30,6 @@ const PlayScreen: React.FC = () => {
   const [startTime, setStartTime] = useState("6:00 PM");
   const [endTime, setEndTime] = useState("7:30 PM");
   const [authVisible, setAuthVisible] = useState(false); 
-  
-
-  const {userToken, isLoading} = useAuth(); 
 
   const openTimePicker = (field: 'start' | 'end') => { setActiveTimeField(field); setTimeModalVisible(true); };
 
@@ -30,28 +39,45 @@ const PlayScreen: React.FC = () => {
     setTimeModalVisible(false);
   };
 
-  const handleMatchButtonPress = () => {
-    if (!isLoading && !userToken) {
+  const handleMatchButtonPress = async () => {
+    // 1. Auth Check
+    if (!authLoading && !userToken) {
       setAuthVisible(true);
       return;
     }
-    setMatchMode(true);
-  }
 
+    // 2. Convert Data using Utility
+    const { start, end } = calculateMatchTimes(selectedDate, startTime, endTime);
+
+    // 3. Call API using Hook
+    const requestId = await startSearch(selectedCourt, start, end);
+
+    // 4. Update UI on success
+    if (requestId) {
+      setMatchRequestId(requestId);
+      setMatchMode(true);
+    }
+  };
+
+  const handleMatchConfirmed = async() => {
+    setMatchMode(false);
+    setMatchRequestId(null);
+    if(userToken) await refreshUser(userToken);
+    Alert.alert("Game On!", "Match has been confirmed. Head to the location!");
+  };
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <View style={styles.container}>
       <View style={styles.header}>
-        <View><Text style={styles.title}>Arena</Text><Text style={styles.sub}>Season 4 Ranked</Text></View>
-        <View style={styles.badge}><Text style={styles.badgeText}>{MY_STATS.elo}</Text></View>
+        <View><Text style={styles.title}>{userData.name}</Text><Text style={styles.sub}>Ready for a Game?</Text></View>
+        <View style={styles.badge}><Text style={styles.badgeText}>{userData.elo}</Text></View>
       </View>
-
       
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.dateSec}>
           <View style={styles.dateHead}><Text style={styles.secTitle}>When to play?</Text><Text style={styles.hardDate}>DECEMBER 2025</Text></View>
 
-          {/* Time Selection */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 10 }}>
             {DATES.map((d) => (
               <TouchableOpacity key={d.id} style={[styles.dBox, selectedDate === d.id && styles.dBoxActive]} onPress={() => setSelectedDate(d.id)}>
@@ -61,7 +87,6 @@ const PlayScreen: React.FC = () => {
             ))}
           </ScrollView>
 
-          {/* Time Selection */}
           <View style={styles.timeRow}>
             <TouchableOpacity style={styles.tPill} onPress={() => openTimePicker('start')}><Text style={styles.tLabel}>Start</Text><Text style={styles.tVal}>{startTime}</Text></TouchableOpacity>
             <View style={styles.tLine} />
@@ -70,13 +95,19 @@ const PlayScreen: React.FC = () => {
         </View>
 
         {/* Start Matching Button */}
-        <View style={styles.center}><PingPongBallButton onPress={handleMatchButtonPress} /><Text style={styles.cta}>Tap to find match</Text></View>
+        <View style={styles.center}>
+          {isStarting ? (
+            <ActivityIndicator size="large" color={COLORS.primary} style={{height: 170}} />
+          ) : (
+            <PingPongBallButton onPress={handleMatchButtonPress} />
+          )}
+          <Text style={styles.cta}>Tap to find match</Text>
+        </View>
 
-        {/* Court Selection */}
         <View style={styles.courtSec}>
           <Text style={[styles.secTitle, { paddingLeft: 24 }]}>Choose Court</Text> 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 20 }}>
-            {[{id:1, name:'Downtown Rec', dist:'0.8mi', col:COLORS.danger}, {id:2, name:'Spin City', dist:'1.2mi', col:COLORS.success}, {id:3, name:'Westside', dist:'2.5mi', col:COLORS.ballEnd}].map((c) => (
+            {courts.map((c) => (
               <TouchableOpacity key={c.id} style={[styles.cCard, selectedCourt === c.id && styles.cCardActive]} onPress={() => setSelectedCourt(c.id)}>
                 <View style={{flexDirection:'row', justifyContent:'space-between'}}><Text style={[styles.cName, selectedCourt === c.id && {color: COLORS.primary}]}>{c.name}</Text>{selectedCourt === c.id && <Feather name="check-circle" size={14} color={COLORS.primary} />}</View>
                 <Text style={styles.cDist}>{c.dist}</Text>
@@ -88,18 +119,31 @@ const PlayScreen: React.FC = () => {
       </ScrollView>
 
       <TimePickerModal visible={timeModalVisible} title={activeTimeField === 'start' ? "Start Time" : "End Time"} onClose={() => setTimeModalVisible(false)} onSelect={handleTimeSelect} />
-      <VsMatchingScreen visible={matchMode} onClose={() => setMatchMode(false)} onMatchAccepted={() => { setMatchMode(false); Alert.alert("Match Accepted!", "Game on."); }} />
-       <AuthModal 
+      
+      <VsMatchingScreen 
+        visible={matchMode} 
+        matchRequestId={matchRequestId} 
+        onClose={() => setMatchMode(false)} 
+        onMatchConfirmed={handleMatchConfirmed} 
+      />
+      
+      <AuthModal 
         visible={authVisible} 
         onClose={() => setAuthVisible(false)}
-        onLoginSuccess={() => {
-        }}
+        onLoginSuccess={() => console.log("Login Success")}
       />
     </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    // Android fix for Status Bar overlap:
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  },
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: { padding: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: 30, fontWeight: '900', color: COLORS.text },

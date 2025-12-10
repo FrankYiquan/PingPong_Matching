@@ -1,64 +1,60 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Modal, View, Text, TouchableOpacity, Image, SafeAreaView, Animated, Vibration, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect } from 'react';
+import { Modal, View, Text, TouchableOpacity, Image, SafeAreaView, Animated, StyleSheet, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/theme';
-import { MY_STATS, MOCK_OPPONENT, Match } from '../constants/data';
+import { MY_STATS } from '../constants/data';
 import MiniFlyingBall from '../components/animations/MiniFlyingBall';
 import RadarScanner from '../components/animations/RadarScanner';
+import { useMatchmaking } from '../hooks/useMatchmaking'; 
+import { generateLetterCreditScore } from '../utils/dateHelper';
 
 const { width, height } = Dimensions.get('window');
 
 interface Props {
   visible: boolean;
+  matchRequestId: string | null;
   onClose: () => void;
-  onMatchAccepted: () => void;
+  onMatchConfirmed: (matchData: any) => void;
 }
 
-const VsMatchingScreen: React.FC<Props> = ({ visible, onClose, onMatchAccepted }) => {
-  const [status, setStatus] = useState<'searching' | 'found'>('searching');
-  const [opponent, setOpponent] = useState<Match | null>(null);
+const VsMatchingScreen: React.FC<Props> = ({ visible, matchRequestId, onClose, onMatchConfirmed }) => {
   
-  const pulse = useRef(new Animated.Value(1)).current;
-  const flyIn = useRef(new Animated.Value(50)).current; 
-  const fade = useRef(new Animated.Value(0)).current;
+  // 1. USE THE CUSTOM HOOK
+  const { 
+    status, 
+    opponent, 
+    pulse, 
+    flyIn, 
+    fade, 
+    acceptMatch, 
+    declineMatch, 
+    cancelSearch 
+  } = useMatchmaking(matchRequestId, onMatchConfirmed, onClose);
 
+  // 2. Local Animation Loop for Pulse (UI Only)
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
     if (visible && status === 'searching') {
       Animated.loop(Animated.sequence([
         Animated.timing(pulse, { toValue: 1.1, duration: 1000, useNativeDriver: true }), 
         Animated.timing(pulse, { toValue: 1, duration: 1000, useNativeDriver: true })
       ])).start();
-      timer = setTimeout(() => { setOpponent(MOCK_OPPONENT); setStatus('found'); Vibration.vibrate(); }, 3500);
-    } else if (!visible) {
-      setStatus('searching'); setOpponent(null);
     }
-    return () => clearTimeout(timer);
   }, [visible, status]);
 
-  useEffect(() => {
-    if (status === 'found') {
-      Animated.parallel([
-        Animated.spring(flyIn, { toValue: 0, useNativeDriver: true }), 
-        Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true })
-      ]).start();
-    } else { 
-      flyIn.setValue(50); fade.setValue(0); 
-    }
-  }, [status]);
-
-  const handleDecline = () => { setOpponent(null); setStatus('searching'); };
-
   return (
-    <Modal visible={visible} animationType="fade" transparent={false}>
+    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={cancelSearch}>
       <View style={styles.container}>
         <MiniFlyingBall active={status === 'found'} />
         
         {/* TOP HALF */}
         <View style={styles.topHalf}>
           <SafeAreaView style={{width:'100%'}}>
-             <TouchableOpacity onPress={onClose} style={styles.closeBtn}><Feather name="x" size={24} color={COLORS.text} /></TouchableOpacity>
+             {!opponent && (
+              <TouchableOpacity onPress={cancelSearch} style={styles.closeBtn}>
+                <Feather name="x" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            )}
           </SafeAreaView>
           <View style={styles.playerBlock}>
             <Image source={{uri: MY_STATS.avatar}} style={[styles.avatar, {borderColor: COLORS.primary}]} />
@@ -78,17 +74,36 @@ const VsMatchingScreen: React.FC<Props> = ({ visible, onClose, onMatchAccepted }
         {/* BOTTOM HALF */}
         <View style={styles.bottomHalf}>
           {status === 'searching' ? (
-            <View style={styles.center}><RadarScanner /><Text style={styles.searchTxt}>Scanning Area...</Text><Text style={styles.subTxt}>Finding worthy opponents</Text></View>
+            <View style={styles.center}>
+                <RadarScanner />
+                <Text style={styles.searchTxt}>Scanning Area...</Text>
+                <Text style={styles.subTxt}>Finding worthy opponents</Text>
+            </View>
           ) : (
             <Animated.View style={[styles.center, { transform: [{ translateY: flyIn }], opacity: fade }]}>
-               <Text style={styles.foundTitle}>CHALLENGER FOUND</Text>
-               <Image source={{uri: opponent?.avatar}} style={[styles.avatar, {borderColor: COLORS.danger}]} />
-               <Text style={styles.name}>{opponent?.name}</Text>
-               <Text style={styles.badgeText}>{opponent?.elo} ELO</Text>
-               <View style={styles.actions}>
-                  <TouchableOpacity style={styles.reject} onPress={handleDecline}><Feather name="x" size={30} color={COLORS.danger} /></TouchableOpacity>
-                  <TouchableOpacity style={styles.fight} onPress={onMatchAccepted}><Text style={styles.fightText}>FIGHT</Text></TouchableOpacity>
-               </View>
+               
+               {status === 'accepted' ? (
+                   <View style={{alignItems:'center', marginBottom: 20}}>
+                       <Feather name="check-circle" size={50} color={COLORS.success} />
+                       <Text style={[styles.searchTxt, {marginTop: 10, color: COLORS.success}]}>Waiting for Opponent...</Text>
+                   </View>
+               ) : (
+                   <Text style={styles.foundTitle}>CHALLENGER FOUND</Text>
+               )}
+
+               <Image 
+                 source={{ uri: opponent?.profileImage || "https://i.pravatar.cc/150?u=unknown" }} 
+                 style={[styles.avatar, {borderColor: COLORS.danger}]} 
+               />
+               <Text style={styles.name}>{opponent?.username}</Text>
+               <Text style={styles.badgeText}>Credit Rating: {generateLetterCreditScore(opponent.creditScore)}</Text>
+               
+               {status === 'found' && (
+                   <View style={styles.actions}>
+                      <TouchableOpacity style={styles.reject} onPress={declineMatch}><Feather name="x" size={30} color={COLORS.danger} /></TouchableOpacity>
+                      <TouchableOpacity style={styles.fight} onPress={acceptMatch}><Text style={styles.fightText}>FIGHT</Text></TouchableOpacity>
+                   </View>
+               )}
             </Animated.View>
           )}
         </View>
@@ -97,7 +112,9 @@ const VsMatchingScreen: React.FC<Props> = ({ visible, onClose, onMatchAccepted }
   );
 };
 
+// ... Styles remain exactly the same as before
 const styles = StyleSheet.create({
+  // ... (copy styles from previous message)
   container: { flex: 1, backgroundColor: COLORS.bg },
   topHalf: { flex: 1, backgroundColor: COLORS.vsBlue, justifyContent: 'center', alignItems: 'center', paddingBottom: 40, position: 'relative', overflow: 'hidden' },
   diagonal: { position: 'absolute', bottom: -50, left: -50, width: width + 100, height: 100, backgroundColor: COLORS.vsRed, transform: [{ rotate: '-5deg' }], zIndex: 0 },

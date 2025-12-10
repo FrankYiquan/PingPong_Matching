@@ -9,6 +9,9 @@ import {
   declineMatchRequest,
   getWaitlist,
   markWaitlisted,
+  submitMatchScore,
+  cancelScheduledMatch,
+  createDirectMatch,
 } from "../controllers/matchController";
 
 export function createMatchRouter(notifier: Notifier) {
@@ -38,6 +41,20 @@ export function createMatchRouter(notifier: Notifier) {
   // mark waitlisted: /waitlist/:id
   router.post("/waitlist/:id", markWaitlisted);
 
+  // submit match score
+  router.post("/score", submitMatchScore)
+
+  router.post("/cancel-scheduled", (req, res) => 
+    cancelScheduledMatch(req, res, notifier)
+  );
+
+  router.post("/challenge", (req, res) => 
+    createDirectMatch(req, res, notifier)
+  );
+
+
   return router;
+
+
 }
 

@@ -9,10 +9,11 @@ export const COLORS = {
   success: '#10B981',
   danger: '#EF4444',
   card: '#FFFFFF',        
-  border: '#E2E8F0',      
+  border: '#d3e0f1ff',      
   tabBar: '#FFFFFF',
   shadow: '#94A3B8',
   vsBlue: '#EFF6FF',
   vsRed: '#FFF1F2',
-  vsDivider: '#FFF1F2'
+  vsDivider: '#FFF1F2',
+  upcomingCard: '#rgba(241, 241, 242, 1)',
 };

@@ -5,6 +5,7 @@ import {
   lockKey,
   confirmKey,
   matchReqKey,
+  avoidMatchKey,
 } from "../redis/key";
 import { Location, RedisMatchRequest } from "../types/matchmakingTypes";
 import { getRedisMatchRequest } from "./redisHelpers";
@@ -49,33 +50,45 @@ async function releaseLock(id: string): Promise<void> {
 // - not locked
 // - still in "pending" status in Mongo
 async function cleanupExpired(id: string, location: Location): Promise<void> {
-  // 1. If locked, matching is happening; do not touch
+  // 1. Check Lock First (Fast Redis check)
+  // If locked, the match engine is processing them right now.
   const lockExists = await redis.exists(lockKey(id));
   if (lockExists) return;
 
-  // 2. Check Mongo status: only expire "pending" requests
-  const doc = await MatchRequest.findById(id).select("status").lean();
-  if (!doc) {
-    // Optionally still clean Redis 
-    await redis.zrem(activeQueueKey(location), id);
-    await redis.del(matchReqKey(id));
-    return;
-  }
-
-  if (doc.status !== "searching") {
-    // Already matched / pending_confirmation / cancelled / etc.s
-    // Do not overwrite that with "expired".
-    return;
-  }
-
-  // 3. TTL marker: if it still exists, user is still "searching"
+  // 2. Check TTL Second (Fast Redis check) 
+  // If TTL exists, they are active. Return immediately. 
+  // Don't bother MongoDB.
   const ttlExists = await redis.exists(searchingTTLKey(id));
   if (ttlExists) return;
 
-  // 4. Truly expired: remove from Redis queue + hash, mark Mongo as expired
-  await redis.zrem(activeQueueKey(location), id);
-  await redis.del(matchReqKey(id));
-  await MatchRequest.findByIdAndUpdate(id, { status: "expired" }).exec();
+  // 3. If we get here, TTL is gone. 
+  // It could be expired, OR they could have just been matched/cancelled 
+  // and the TTL was deleted by another process.
+  
+  // atomically update ONLY if status is 'searching' -> Prevent RACE CONDITION
+  const result = await MatchRequest.findOneAndUpdate(
+    { _id: id, status: "searching" }, // Condition
+    { status: "expired" },            // Update
+    { new: true }
+  );
+
+  // 4. If result is null, it means the status was NOT 'searching' 
+  // (e.g., they were matched, cancelled, or already expired).
+  // In that case, we assume the other process(accept/decline, cancel) handled the Redis cleanup.
+  if (result) {
+    // We successfully marked them as expired, so now we clean Redis.
+    await redis.zrem(activeQueueKey(location), id);
+    await redis.del(matchReqKey(id));
+    console.log(`[Cleanup] Request ${id} expired.`);
+  } else {
+    // Optional: Safety cleanup
+    // If the doc doesn't exist at all (deleted manually?), remove from Redis
+    const exists = await MatchRequest.exists({ _id: id });
+    if (!exists) {
+       await redis.zrem(activeQueueKey(location), id);
+       await redis.del(matchReqKey(id));
+    }
+  }
 }
 
 // Move both to pending_confirmation
@@ -91,19 +104,45 @@ async function moveToPendingConfirmation(
 ) {
   const queueKey = activeQueueKey(a.location);
 
-  // 1. Update Mongo status first so cleanupExpired won't mark expired
-  await Promise.all([
-    MatchRequest.findByIdAndUpdate(a.matchRequestId, {
-      status: "pending_confirmation",
-      opponentRequestId: b.matchRequestId,
-    }).exec(),
-    MatchRequest.findByIdAndUpdate(b.matchRequestId, {
-      status: "pending_confirmation",
-      opponentRequestId: a.matchRequestId,
-    }).exec(),
+  // Only update if status is specifically 'searching'.
+  // If user cancelled, status will be 'cancelled' and this query will return null.
+  const [resA, resB] = await Promise.all([
+    MatchRequest.findOneAndUpdate(
+      { _id: a.matchRequestId, status: "searching" }, // Condition
+      { status: "pending_confirmation", opponentRequestId: b.matchRequestId }, // Update
+      { new: true }
+    ).exec(),
+    MatchRequest.findOneAndUpdate(
+      { _id: b.matchRequestId, status: "searching" },
+      { status: "pending_confirmation", opponentRequestId: a.matchRequestId },
+      { new: true }
+    ).exec(),
   ]);
 
-  // 2. Remove from queue and TTL markers
+  // Handle Race Conditions
+  if (!resA || !resB) {
+    console.log("[Engine] Race condition detected. One user cancelled.");
+
+    // If A failed (was cancelled), but B succeeded, we must revert B back to searching!
+    if (resB && !resA) {
+      await MatchRequest.findByIdAndUpdate(b.matchRequestId, { 
+        status: "searching", 
+        opponentRequestId: null 
+      });
+      // B stays in Redis, A is ignored.
+    }
+    // If A succeeded but B failed, revert A.
+    if (resA && !resB) {
+      await MatchRequest.findByIdAndUpdate(a.matchRequestId, { 
+        status: "searching", 
+        opponentRequestId: null 
+      });
+    }
+
+    // Since the match failed, we DO NOT proceed to notify or clear Redis for this pair.
+    return;
+  }
+  // 2. Remove from queue and TTL markers (Success path)
   await redis.zrem(queueKey, a.matchRequestId, b.matchRequestId);
 
   await redis.del(
@@ -111,10 +150,10 @@ async function moveToPendingConfirmation(
     searchingTTLKey(b.matchRequestId)
   );
 
-  // Optionally, also clear the Redis matchReq hashes if you only need Mongo from now on
-  // await redis.del(matchReqKey(a.matchRequestId), matchReqKey(b.matchRequestId));
+  // 3. DELETE MATCH REQUEST DATA
+  await redis.del(matchReqKey(a.matchRequestId), matchReqKey(b.matchRequestId));
 
-  // 3. Set confirm keys for confirm flow
+  // 4. Set confirm keys
   await redis.set(confirmKey(a.matchRequestId), "waiting", "EX", CONFIRM_TTL_SECONDS);
   await redis.set(confirmKey(b.matchRequestId), "waiting", "EX", CONFIRM_TTL_SECONDS);
 
@@ -188,6 +227,33 @@ async function tryMatchForLocation(location: Location, notifier: Notifier) {
       if (!b) {
         await releaseLock(idB);
         continue;
+      }
+
+      if (a.userId === b.userId) {
+        console.log(`[Engine] Self-match detected for user ${a.userId}. Cleaning stale request ${idA}.`);
+        
+        // idA is the "older" one (because i < j in the sorted set).
+        // We assume the older one is the stale/cancelled one.
+        
+        // 1. Remove A from Redis entirely
+        const queueKey = activeQueueKey(location);
+        await redis.zrem(queueKey, idA);
+        await redis.del(matchReqKey(idA));
+        await redis.del(searchingTTLKey(idA));
+        
+        // 2. Release locks
+        await releaseLock(idA);
+        await releaseLock(idB);
+        
+        // 3. Break the inner loop to stop processing 'A', effectively skipping to the next user in the outer loop
+        break; 
+      }
+
+      // Check if these two users are temporarily blocked from matching
+      const isBlocked = await redis.exists(avoidMatchKey(idA, idB));
+      if (isBlocked) {
+        await releaseLock(idB);
+        continue; // Skip this pair, try next person
       }
 
       if (areCompatible(a, b)) {

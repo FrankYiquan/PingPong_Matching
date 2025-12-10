@@ -1,8 +1,7 @@
 import { redis } from "../redis/redisClient";
-import { activeQueueKey, confirmKey, matchReqKey, searchingTTLKey } from "../redis/key";
+import { confirmKey, matchReqKey, avoidMatchKey } from "../redis/key"; // Import avoidMatchKey
 import { MatchRequest } from "../models/MatchRequest";
 import { Match } from "../models/Match";
-import { getRedisMatchRequest } from "./redisHelpers";
 import { Notifier } from "./notifier";
 import { enqueueMatchRequest } from "./enqueue";
 import { User } from "../models/User";
@@ -13,14 +12,11 @@ export async function acceptMatch(
   notifier: Notifier
 ) {
   const req = await MatchRequest.findById(matchRequestId).exec();
-  console.log("Accepting match for request ID:", matchRequestId);
-  console.log("Accepting match for request:", !req);
-  console.log("Request status:", req?.status);
+  
   if (!req || req.status !== "pending_confirmation") {
-    throw new Error("No pending match to accept");
+    throw new Error("No pending match to accept or match timed out");
   }
 
-  // Make sure this request belongs to the user
   if (req.userId.toString() !== userId) {
     throw new Error("Not authorized on this match request");
   }
@@ -28,36 +24,39 @@ export async function acceptMatch(
   const confirmAKey = confirmKey(matchRequestId);
   await redis.set(confirmAKey, "accepted", "EX", 15);
 
-  if (!req.opponentRequestId) return; // weird but ok
-  const oppId = req.opponentRequestId.toString(); // from user A matchRequest to get user B matchRequest Id
+  if (!req.opponentRequestId) return; 
+  const oppId = req.opponentRequestId.toString();
   const confirmBKey = confirmKey(oppId);
 
-  // Check if opponent has accepted
-  // if not, safely return -> wait for opponent to accept (I am the first to accept)
-  // if yes, meaning I am the later one to accept, finalize match
   const oppStatus = await redis.get(confirmBKey);
+  
   if (oppStatus === "accepted") {
-    // Both accepted → finalize match
-    const aRedis = await getRedisMatchRequest(matchRequestId);
-    const bRedis = await getRedisMatchRequest(oppId);
-    if (!aRedis || !bRedis) return;
+    // The match engine deletes Redis data when moving to pending, 
+    // rely on the Database now.
+    // avoid the case where opponent request no longer exists
+    const oppReq = await MatchRequest.findById(oppId).exec();
+    
+    if (!oppReq) {
+      // Rare edge case: Opponent deleted request?
+      throw new Error("Opponent request invalid");
+    }
 
     const match = await Match.create({
-      player1Id: aRedis.userId,
-      player2Id: bRedis.userId,
-      location: aRedis.location,
-      scheduledStartTime: new Date(aRedis.startTimeMs),
+      player1Id: req.userId,
+      player2Id: oppReq.userId,
+      location: req.location,
+      scheduledStartTime: req.startTime, 
     });
 
     await MatchRequest.findByIdAndUpdate(matchRequestId, { status: "matched" });
     await MatchRequest.findByIdAndUpdate(oppId, { status: "matched" });
 
-    // Clean Redis
-    await redis.del(confirmAKey, confirmBKey, matchReqKey(matchRequestId), matchReqKey(oppId));
+    // Clean keys
+    await redis.del(confirmAKey, confirmBKey);
 
-    // Notify both users
-    await notifier.notifyUser(aRedis.userId, "MATCH_CONFIRMED", { matchId: match._id });
-    await notifier.notifyUser(bRedis.userId, "MATCH_CONFIRMED", { matchId: match._id });
+    // Notify both
+    await notifier.notifyUser(req.userId.toString(), "MATCH_CONFIRMED", { matchId: match._id });
+    await notifier.notifyUser(oppReq.userId.toString(), "MATCH_CONFIRMED", { matchId: match._id });
   }
 }
 
@@ -75,7 +74,7 @@ export async function declineMatch(
 
   const opponentId = req.opponentRequestId?.toString();
 
-  // Reset status
+  // 1. Reset My Status
   req.status = "searching";
   req.opponentRequestId = null;
   await req.save();
@@ -83,9 +82,13 @@ export async function declineMatch(
   // Clean confirm key
   await redis.del(confirmKey(matchRequestId));
 
-  // Notify opponent if exists
   if (opponentId) {
     await redis.del(confirmKey(opponentId));
+
+    // --- FIX: PREVENT IMMEDIATE RE-MATCH ---
+    // Set a key that expires in 60 seconds preventing these two IDs from matching
+    const avoidKey = avoidMatchKey(matchRequestId, opponentId);
+    await redis.set(avoidKey, "1", "EX", 5); 
 
     const oppReq = await MatchRequest.findById(opponentId);
     if (oppReq) {
@@ -97,15 +100,15 @@ export async function declineMatch(
         msg: "Opponent declined, searching again.",
       });
 
-      // re-enqueue opponent
+      // Re-enqueue Opponent
       const oppUser = await User.findById(oppReq.userId);
-      await enqueueMatchRequest(oppReq, oppUser!);
+      if (oppUser) await enqueueMatchRequest(oppReq, oppUser);
     }
   }
 
-  // re-enqueue this user
+  // Re-enqueue Me
   const user = await User.findById(userId);
-  await enqueueMatchRequest(req, user!);
+  if (user) await enqueueMatchRequest(req, user);
 
   return { ok: true };
 }

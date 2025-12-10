@@ -1,3 +1,5 @@
+import { COLORS } from "./theme";
+
 export interface User {
   name: string;
   rank: number;
@@ -11,7 +13,8 @@ export interface User {
 export interface Match {
   id: string | number;
   opponent: string;
-  date?: string;
+  date: string;     // e.g. "12/25/2025"
+  time: string;     // e.g. "06:30 PM"
   avatar: string;
   elo?: number;
   name?: string; 
@@ -49,18 +52,18 @@ export const MY_STATS: User = {
   avatar: "https://i.pravatar.cc/150?u=julian" 
 };
 
-export const MOCK_OPPONENT: Match = { 
-  id: 2, 
-  name: "David W.", 
-  opponent: "David W.",
-  elo: 1510, 
-  avatar: "https://i.pravatar.cc/150?u=david" 
-};
+// export const MOCK_OPPONENT: Match = { 
+//   id: 2, 
+//   name: "David W.", 
+//   opponent: "David W.",
+//   elo: 1510, 
+//   avatar: "https://i.pravatar.cc/150?u=david" 
+// };
 
-export const PENDING_MATCHES_LIST: Match[] = [
-  { id: 'm1', opponent: 'David W.', date: 'Today, 10:00 AM', avatar: "https://i.pravatar.cc/150?u=david" },
-  { id: 'm2', opponent: 'Chris P.', date: 'Yesterday', avatar: "https://i.pravatar.cc/150?u=chris" },
-];
+// export const PENDING_MATCHES_LIST: Match[] = [
+//   { id: 'm1', opponent: 'David W.', date: 'Today, 10:00 AM', avatar: "https://i.pravatar.cc/150?u=david" },
+//   { id: 'm2', opponent: 'Chris P.', date: 'Yesterday', avatar: "https://i.pravatar.cc/150?u=chris" },
+// ];
 
 export const HISTORY: HistoryItem[] = [
   { id: 1, opponent: "Sarah L.", score: "11-9, 11-7", result: "W", date: "Yesterday" },
@@ -91,3 +94,76 @@ for (let i = 0; i < 32; i++) {
   const dispM = m === 0 ? '00' : '30';
   TIME_SLOTS.push(`${dispH}:${dispM} ${period}`);
 }
+
+export interface MatchItem {
+  id: string;
+  opponent: string;
+  avatar?: string;
+  time: string;      
+  location: string;  
+  date: string;
+  score?: string;
+  result?: 'W' | 'L';
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  elo: number;
+  creditScore: number;
+  rank: number;
+  winRate: string;
+  streak: number;
+  matches: number;
+  history: MatchItem[];
+  pendingMatches: MatchItem[];
+}
+
+export const DEFAULT_USER: UserProfile = {
+  id: "",
+  name: "Loading...",
+  email: "",
+  avatar: "https://i.pravatar.cc/150?u=default",
+  elo: 1000,
+  creditScore: 100,
+  rank: 0,
+  winRate: "0%",
+  streak: 0,
+  matches: 0,
+  history: [],
+  pendingMatches: []
+};
+
+export const calculateMatchTimes = (dayIndex: number, startTimeStr: string, endTimeStr: string) => {
+  // 1. Calculate base date (Today + index)
+  // Note: DATES[dayIndex].date is just the day number, so we recalculate from today
+  const baseDate = new Date();
+  baseDate.setDate(baseDate.getDate() + dayIndex);
+
+  // 2. Helper to parse "6:00 PM" into a Date object
+  const parseTime = (timeStr: string) => {
+    const [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':');
+    let h = parseInt(hours);
+    
+    if (hours === '12') h = 0;
+    if (modifier === 'PM') h += 12;
+    
+    const d = new Date(baseDate);
+    d.setHours(h, parseInt(minutes), 0, 0);
+    return d;
+  };
+
+  return {
+    start: parseTime(startTimeStr),
+    end: parseTime(endTimeStr)
+  };
+};
+
+export const courts = [
+  { id: 1, name: 'Gosman', dist: '5 Tables', col: COLORS.success },
+  { id: 2, name: 'Sharpiro',   dist: '2 Tables', col: COLORS.ballEnd },
+  { id: 3, name: 'IBS',    dist: '1 Table', col: COLORS.danger },
+];

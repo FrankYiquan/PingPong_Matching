@@ -9,8 +9,11 @@ import { startMatchEngine } from "./matchmaking/matchEngine";
 import { createMatchRouter } from "./routes/matchRoutes";
 import { Notifier } from "./matchmaking/notifier";
 import { createUserRouter } from "./routes/userRoutes";
+const cors = require("cors");
 
+// ---------- EXPRESS SETUP ----------
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // ---------- DATABASE ----------

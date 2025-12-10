@@ -3,13 +3,14 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/User";
 import { Request, Response } from "express";
 import { CreateUserBody, LoginUserBody } from "../types/routeTypes";
+import { Match } from "../models/Match";
 
 export const createUser = async (
     req: Request<{}, {}, CreateUserBody>,
     res: Response
 ) => {
   try {
-    const { username, email, password, profileImage } = req.body;
+    const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ error: "username, email, password required" });
@@ -24,7 +25,7 @@ export const createUser = async (
       username,
       email,
       password: hashed,
-      profileImage: profileImage ?? "avatar1.png",
+      profileImage: "avatar1.png",
       elo: 1000,
       creditScore: 100,
     });
@@ -71,3 +72,81 @@ export const loginUser = async (
     res.status(500).json({ error: err.message });
   }
 };
+
+export const getMe = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Fetch ALL matches involving user
+    const allMatches = await Match.find({
+      $or: [{ player1Id: userId }, { player2Id: userId }]
+    })
+    .sort({ scheduledStartTime: -1 })
+    .populate("player1Id", "username profileImage")
+    .populate("player2Id", "username profileImage");
+
+    const pendingMatches: any[] = [];
+    const history: any[] = [];
+    let wins = 0;
+    let completedCount = 0;
+
+    allMatches.forEach((m: any) => {
+      const isP1 = m.player1Id._id.toString() === userId;
+      const opponent = isP1 ? m.player2Id : m.player1Id;
+
+      // DATA OBJECT FOR FRONTEND
+      const matchObj = {
+        id: m._id,
+        opponent: opponent.username,
+        avatar: opponent.profileImage, // currently default image
+        date: new Date(m.scheduledStartTime).toLocaleDateString(),
+        time: new Date(m.scheduledStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        location: m.location,
+        result: "",
+        score: ""
+      };
+
+      if (m.status === "completed") {
+        // HISTORY
+        completedCount++;
+        const myScore = isP1 ? m.player1Score : m.player2Score;
+        const oppScore = isP1 ? m.player2Score : m.player1Score;
+        
+        const isWin = m.winnerId && m.winnerId.toString() === userId;
+        if (isWin) wins++;
+
+        matchObj.result = isWin ? "W" : "L";
+        matchObj.score = `${myScore}-${oppScore}`;
+        history.push(matchObj);
+      } else if (m.status !== "cancelled") {
+        // PENDING (Status is 'scheduled' or 'matched')
+        pendingMatches.push(matchObj);
+      }
+    });
+
+    // Stats Logic
+    const winRate = completedCount > 0 
+      ? Math.round((wins / completedCount) * 100) + "%" 
+      : "0%";
+
+    res.json({
+      id: user._id,
+      name: user.username,
+      email: user.email,
+      avatar: user.profileImage,
+      elo: user.elo,
+      creditScore: user.creditScore,
+      winRate,
+      streak: 0, //TB deleted 
+      matches: completedCount,
+      history,
+      pendingMatches 
+    });
+
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
