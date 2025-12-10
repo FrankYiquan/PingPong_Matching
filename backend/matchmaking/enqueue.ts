@@ -24,6 +24,7 @@ export async function enqueueMatchRequest(
     matchRequestId: id,
     userId: user._id.toString(),
     location: request.location,
+    avatar: user.profileImage,
     startTimeMs: request.startTime.getTime(),
     endTimeMs: request.endTime.getTime(),
     elo: user.elo,

@@ -3,11 +3,12 @@ import { Modal, View, Text, TouchableOpacity, Image, SafeAreaView, Animated, Sty
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/theme';
-import { MY_STATS } from '../constants/data';
 import MiniFlyingBall from '../components/animations/MiniFlyingBall';
 import RadarScanner from '../components/animations/RadarScanner';
 import { useMatchmaking } from '../hooks/useMatchmaking'; 
 import { generateLetterCreditScore } from '../utils/dateHelper';
+import {useAuth} from '../context/AuthContext';
+import {images} from '../constants/data';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,6 +32,9 @@ const VsMatchingScreen: React.FC<Props> = ({ visible, matchRequestId, onClose, o
     declineMatch, 
     cancelSearch 
   } = useMatchmaking(matchRequestId, onMatchConfirmed, onClose);
+
+  const { userData } = useAuth();
+
 
   // 2. Local Animation Loop for Pulse (UI Only)
   useEffect(() => {
@@ -57,9 +61,9 @@ const VsMatchingScreen: React.FC<Props> = ({ visible, matchRequestId, onClose, o
             )}
           </SafeAreaView>
           <View style={styles.playerBlock}>
-            <Image source={{uri: MY_STATS.avatar}} style={[styles.avatar, {borderColor: COLORS.primary}]} />
-            <Text style={styles.name}>{MY_STATS.name}</Text>
-            <View style={styles.badge}><Text style={styles.badgeText}>ELO {MY_STATS.elo}</Text></View>
+            <Image source={images[userData.avatar]} style={[styles.avatar, {borderColor: COLORS.primary}]} />
+            <Text style={styles.name}>{userData.name}</Text>
+            <View style={styles.badge}><Text style={styles.badgeText}>ELO {userData.elo}</Text></View>
           </View>
           <View style={styles.diagonal} />
         </View>
@@ -92,11 +96,11 @@ const VsMatchingScreen: React.FC<Props> = ({ visible, matchRequestId, onClose, o
                )}
 
                <Image 
-                 source={{ uri: opponent?.profileImage || "https://i.pravatar.cc/150?u=unknown" }} 
+                 source={images[opponent!.profileImage]} 
                  style={[styles.avatar, {borderColor: COLORS.danger}]} 
                />
                <Text style={styles.name}>{opponent?.username}</Text>
-               <Text style={styles.badgeText}>Credit Rating: {generateLetterCreditScore(opponent.creditScore)}</Text>
+               <Text style={styles.badgeText}>Credit Rating: {generateLetterCreditScore(opponent!.creditScore)}</Text>
                
                {status === 'found' && (
                    <View style={styles.actions}>

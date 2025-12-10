@@ -21,7 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onLoginSuccess?: () => void;
+  onLoginSuccess?: (token: string) => void;
 }
 
 const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
@@ -29,36 +29,43 @@ const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   
-  // 1. Get isLoading from context
-  const { login, register, isLoading } = useAuth();
+  const { login, register } = useAuth();
 
   const handleSubmit = async () => {
-    // Basic validation
-    if (!email || !password || (!isLogin && !username)) {
-      Alert.alert("Missing Fields", "Please fill in all fields.");
-      return;
+  if (!email || !password || (!isLogin && !username)) {
+    Alert.alert("Missing Fields", "Please fill in all fields.");
+    return;
+  }
+
+  setSubmitting(true);
+  try {
+    let token: string;
+
+    if (isLogin) {
+      token = await login(email, password);
+    } else {
+      token = await register(username, email, password);
     }
 
-    try {
-      if (isLogin) {
-        await login(email, password);
-      } else {
-        await register(username, email, password);
-      }
-      
-      // 2. Success! Call the callback and close modal
-      if (onLoginSuccess) onLoginSuccess();
-      onClose();
-      
-      setEmail('');
-      setPassword('');
-      setUsername('');
-      
-    } catch (err: any) {
-      console.log("Auth error:", err.message);
-    }
-  };
+    console.log("Auth successful");
+
+    if (onLoginSuccess) onLoginSuccess(token);
+    onClose();
+
+    setEmail('');
+    setPassword('');
+    setUsername('');
+    
+  } catch (err: any) {
+    console.log("Auth error:", err.message);
+  } finally {
+    console.log("Setting submitting to false");
+    setSubmitting(false);
+  }
+};
+
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -124,9 +131,9 @@ const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
 
               {/* 3. Submit Button with Loading State */}
               <TouchableOpacity 
-                style={[styles.submitBtn, isLoading && { opacity: 0.8 }]} 
+                style={[styles.submitBtn, submitting && { opacity: 0.8 }]} 
                 onPress={handleSubmit}
-                disabled={isLoading} // Prevent double clicks
+                disabled={submitting}
               >
                 <LinearGradient
                   colors={[COLORS.primary, COLORS.primaryDark]}
@@ -134,7 +141,7 @@ const AuthModal: React.FC<Props> = ({ visible, onClose, onLoginSuccess }) => {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  {isLoading ? (
+                  {submitting ? (
                     <ActivityIndicator color="white" />
                   ) : (
                     <>

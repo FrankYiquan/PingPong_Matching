@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { MatchRequestStatus, Location } from "./matchmakingTypes";
+import { MatchRequestStatus, Location, imageOptions } from "./matchmakingTypes";
 
 export interface IMatchRequest {
   _id: Types.ObjectId;
@@ -21,7 +21,7 @@ export interface IUser {
   password: string;
   elo: number;
   creditScore: number;
-  profileImage: string;
+  profileImage: imageOptions;
   createdAt: Date;
 }
 

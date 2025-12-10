@@ -6,7 +6,7 @@ import {
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/theme';
-import { Match } from '../constants/data';
+import { images, Match } from '../constants/data';
 import ScoreModal from '../components/modals/ScoreModal';
 import { useAuth } from '../context/AuthContext';
 import AuthModal from '../components/modals/AuthModal';
@@ -120,7 +120,10 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.upcomingContent}>
           <View style={styles.upcomingHeader}>
             <View style={{flexDirection:'row', alignItems:'center'}}>
-              <Image source={{ uri: "https://i.pravatar.cc/150?u=default" }} style={styles.upcomingAvatar} />
+              <Image 
+                source={images[userData.avatar]} 
+                style={styles.upcomingAvatar}
+              />
               <View style={{marginLeft: 10}}>
                 <Text style={styles.upcomingLabel}>VS</Text>
                 <Text style={styles.upcomingName}>{match.opponent}</Text>
@@ -200,7 +203,7 @@ const ProfileScreen: React.FC = () => {
         {/* Scan Button */}
         <View style={styles.section}>
           <TouchableOpacity style={styles.scanBtn} onPress={() => setShowCamera(true)}>
-            <MaterialCommunityIcons name="qrcode-scan" size={24} color={COLORS.primary} />
+            <MaterialCommunityIcons name="qrcode-scan" size={24} color={COLORS.bg} />
             <Text style={styles.scanText}>Scan Opponent QR</Text>
           </TouchableOpacity>
       </View>
@@ -230,7 +233,7 @@ const ProfileScreen: React.FC = () => {
           {activeTab === 'upcoming' ? renderUpcoming() : renderHistory()}
         </View>
 
-        {/* 3. FIX: LOGOUT BUTTON */}
+        {/* 3. LOGOUT BUTTON */}
         <View style={styles.section}>
           <TouchableOpacity 
             style={[styles.logoutBtn, { marginTop: 20, borderColor: COLORS.danger, borderWidth: 1 }]} 
@@ -292,8 +295,11 @@ const ProfileScreen: React.FC = () => {
         onClose={() => setShowChallengeModal(false)}
         onSuccess={handleChallengeSuccess}
       />
-      
-      <AuthModal visible={authVisible} onClose={() => setAuthVisible(false)} onLoginSuccess={() => { if(userToken) refreshUser(userToken); }} />
+    <AuthModal
+    visible={authVisible}
+    onClose={() => setAuthVisible(false)}
+    onLoginSuccess={(token) => refreshUser(token)}
+  />
     </View>
     </SafeAreaView>
   );
@@ -312,9 +318,9 @@ const styles = StyleSheet.create({
   sub: { fontSize: 14, color: COLORS.textSec },
   qrBtn: { padding: 8, backgroundColor: COLORS.card, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   section: { paddingHorizontal: 24, marginBottom: 25 },
-  scanBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.shadow, shadowOpacity: 0.05, shadowRadius: 5 },
+  scanBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.shadow, shadowOpacity: 0.05, shadowRadius: 5,},
   logoutBtn: { backgroundColor: COLORS.bg, padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.shadow, shadowOpacity: 0.05, shadowRadius: 5 },
-  scanText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 16 },
+  scanText: { color: COLORS.bg, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
   tabContainer: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 20, gap: 20 },
   tabBtn: { paddingVertical: 8, paddingHorizontal: 4, position: 'relative' },
   tabBtnActive: {},

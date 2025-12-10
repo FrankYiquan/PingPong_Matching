@@ -4,6 +4,7 @@ import { Vibration, Alert, Animated } from 'react-native';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../constants/config';
+import { RedisMatchRequest } from '../constants/data';
 
 export const useMatchmaking = (
   matchRequestId: string | null, 
@@ -14,7 +15,7 @@ export const useMatchmaking = (
   const { userToken } = useAuth();
 
   const [status, setStatus] = useState<'searching' | 'found' | 'accepted' | 'waiting'>('searching');
-  const [opponent, setOpponent] = useState<any>(null);
+  const [opponent, setOpponent] = useState<RedisMatchRequest | null>(null);
 
   // Animation values
   const pulse = useRef(new Animated.Value(1)).current;
@@ -129,7 +130,7 @@ export const useMatchmaking = (
     }
   };
 
-  console.log("useMatchmaking State:", { status, opponent });
+//   console.log("useMatchmaking State:", { status, opponent });
 
   return {
     status,

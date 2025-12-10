@@ -1,6 +1,6 @@
 import { redis } from "../redis/redisClient";
 import { matchReqKey } from "../redis/key";
-import { RedisMatchRequest, Location } from "../types/matchmakingTypes";
+import { RedisMatchRequest, Location, imageOptions } from "../types/matchmakingTypes";
 
 // Retrieve a match request from Redis hash
 export async function getRedisMatchRequest(
@@ -20,7 +20,9 @@ export async function getRedisMatchRequest(
     creditScore: Number(data.creditScore),
     profileImage: data.profileImage,
     username: data.username,
-    playerCount: Number(data.playerCount) as 2,
+    playerCount: Number(data.playerCount) as 2 | 4,
     createdAtMs: Number(data.createdAtMs),
+
+    avatar: data.profileImage as imageOptions,
   };
 }

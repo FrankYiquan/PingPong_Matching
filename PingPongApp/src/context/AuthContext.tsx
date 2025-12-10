@@ -8,8 +8,8 @@ interface AuthContextType {
   userToken: string | null;
   isLoading: boolean;
   userData: UserProfile; 
-  login: (email: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<string>;
+  register: (username: string, email: string, password: string) => Promise<string>;
   logout: () => Promise<void>;
   refreshUser: (token: string) => Promise<void>; 
 }
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
       }
-
+      
       // Store token
       await SecureStore.setItemAsync('userToken', data.token);
       setUserToken(data.token);
@@ -60,6 +60,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await refreshUser(data.token);
 
       console.log("Logged in successfully");
+
+      return data.token as string;
 
     } catch (error: any) {
       Alert.alert('Login Error', error.message);
@@ -84,7 +86,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(data.error || 'Signup failed');
       }
 
-      await login(email, password);
+      const token = await login(email, password);
+      return token as string;
 
     } catch (error: any) {
       Alert.alert('Signup Error', error.message);

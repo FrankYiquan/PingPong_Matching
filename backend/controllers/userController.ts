@@ -25,7 +25,6 @@ export const createUser = async (
       username,
       email,
       password: hashed,
-      profileImage: "avatar1.png",
       elo: 1000,
       creditScore: 100,
     });

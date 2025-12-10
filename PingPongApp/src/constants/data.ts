@@ -110,7 +110,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  avatar: string;
+  avatar:  "pic1" | "pic2" | "pic3" | "pic4";
   elo: number;
   creditScore: number;
   rank: number;
@@ -125,7 +125,7 @@ export const DEFAULT_USER: UserProfile = {
   id: "",
   name: "Loading...",
   email: "",
-  avatar: "https://i.pravatar.cc/150?u=default",
+  avatar:  "pic1",
   elo: 1000,
   creditScore: 100,
   rank: 0,
@@ -167,3 +167,27 @@ export const courts = [
   { id: 2, name: 'Sharpiro',   dist: '2 Tables', col: COLORS.ballEnd },
   { id: 3, name: 'IBS',    dist: '1 Table', col: COLORS.danger },
 ];
+
+export const images = {
+  pic1: require('../../resources/image1.png'),
+  pic2: require('../../resources/image2.png'),
+  pic3: require('../../resources/image3.png'),
+  pic4: require('../../resources/image4.png'),
+
+}
+
+export type AvatarType = "pic1" | "pic2" | "pic3" | "pic4";
+
+export interface RedisMatchRequest {
+  matchRequestId: string;
+  location: "Gosman" | "Shapiro" | "IBS";
+  startTimeMs: number;
+  endTimeMs: number;
+  elo: number;
+  creditScore: number;
+  profileImage: AvatarType;  // "pic2"
+  username: string;
+
+  // If backend adds avatar = profileImage, this becomes required
+  avatar?: AvatarType;
+}
